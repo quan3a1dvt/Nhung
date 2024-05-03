@@ -29,12 +29,33 @@ function App() {
     setFile(event.target.files[0])
   }
   
+  function handleEsp() {
+    const url = `${ENDPOINT}/esp`;
+    axios.post(url).then((response) => {
+      console.log(response.data);
+    });
+  }
+
+  function handleWebcam() {
+    const url = `${ENDPOINT}/webcam`;
+    axios.post(url).then((response) => {
+      console.log(response.data);
+    });
+  }
+
+  function handleStop() {
+    const url = `${ENDPOINT}/stop`;
+    axios.post(url).then((response) => {
+      console.log(response.data);
+    });
+  }
+
   function handleSubmit(event) {
     event.preventDefault()
     const url = `${ENDPOINT}/upload`;
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('fileName', file.name);
+    // formData.append('fileName', file.name);
     const config = {
       headers: {
         'content-type': 'multipart/form-data',
@@ -71,7 +92,17 @@ function App() {
                           <br />
                           <button className="btn btn-block btn-default btn-sm " type="submit">Upload</button>
                         </form>
+                        <div className="col-lg-3 mt-3">
+                          <button className="btn btn-block btn-default btn-sm" onClick={handleEsp}>ESP</button>
+                        </div>
+                        <div className="col-lg-3 mt-3">
+                          <button className="btn btn-block btn-default btn-sm" onClick={handleWebcam}>Webcam</button>
+                        </div>   
+                        <div className="col-lg-3 mt-3">
+                          <button className="btn btn-block btn-default btn-sm" style={{color: 'white', backgroundColor: '#f55d52'}} onClick={handleStop}>Stop</button>
+                        </div>   
                       </div>
+                      
                     </div>
                   </div>
                 </div></section>

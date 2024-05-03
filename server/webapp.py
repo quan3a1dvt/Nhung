@@ -23,111 +23,111 @@ from flask_cors import CORS
 from ultralytics import YOLO
 from flask_socketio import SocketIO
 import base64
+import urllib
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 app = Flask(__name__)
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*",port=5000,host='0.0.0.0')
-@app.route("/upload", methods=["GET", "POST"])
-def predict_img():
-    if request.method == "POST":
-        if 'file' in request.files:
-            f = request.files['file']
-            basepath = os.path.dirname(__file__)
-            filepath = os.path.join(basepath,'uploads',f.filename)
-            print("upload folder is ", filepath)
-            f.save(filepath)
-            global imgpath
-            predict_img.imgpath = f.filename
-            print("printing predict_img :::::: ", predict_img)
-                                               
-            file_extension = f.filename.rsplit('.', 1)[1].lower() 
-            
-            if file_extension == 'jpg':
-                img = cv2.imread(filepath)
+model = None
 
-                # Perform the detection
-                model = YOLO('yolov9c.pt')
-                model.to(device)
-                detections =  model(img, save=True) 
-                _, buffer = cv2.imencode('.jpg', detections[0].plot())
+url_low = "http://10.0.0.172/cam-lo.jpg"
+url_mid = "http://10.0.0.172/cam-mid.jpg"
+url_high = "http://10.0.0.172/cam-hi.jpg"
+
+stop = False
+
+@app.route("/stop", methods=["POST"])
+def stop():
+    global stop
+    stop = True
+    return "Stopped"
+
+@app.route("/esp", methods=["POST"])
+def predict_img_esp():
+    global stop
+    while True:
+        if stop:
+            stop = False
+            break
+        frame = urllib.request.urlopen(url_mid)
+        img_np = np.array(bytearray(frame.read()), dtype=np.uint8)
+        img = cv2.imdecode(img_np, -1)
+        detections =  model(img, save=True) 
+        _, buffer = cv2.imencode('.jpg', detections[0].plot())
+        frame_as_text = base64.b64encode(buffer).decode('utf-8')
+        socketio.emit('frame', frame_as_text)
+    return "Done"
+
+@app.route("/webcam", methods=["POST"])
+def predict_img_webcam():
+    global stop
+    cam = VideoCapture(0)
+    while True:
+        if stop:
+            stop = False
+            break
+        result, frame = cam.read() 
+        if result:
+            detections =  model(frame, save=True) 
+            _, buffer = cv2.imencode('.jpg', detections[0].plot())
+            frame_as_text = base64.b64encode(buffer).decode('utf-8')
+            socketio.emit('frame', frame_as_text)
+    return "Done"
+
+@app.route("/upload", methods=["POST"])
+def predict_img():
+    global stop
+    if 'file' in request.files:
+        f = request.files['file']
+        basepath = os.path.dirname(__file__)
+        filepath = os.path.join(basepath,'uploads',f.filename)
+        print("upload folder is ", filepath)
+        f.save(filepath)
+        global imgpath
+        predict_img.imgpath = f.filename
+        print("printing predict_img :::::: ", predict_img)                                 
+        file_extension = f.filename.rsplit('.', 1)[1].lower() 
+        
+        if file_extension == 'jpg':
+            img = cv2.imread(filepath)
+
+            # Perform the detection
+
+            detections =  model(img, save=True) 
+            _, buffer = cv2.imencode('.jpg', detections[0].plot())
+            frame_as_text = base64.b64encode(buffer).decode('utf-8')
+            socketio.emit('frame', frame_as_text)
+            return "Done"
+        elif file_extension == 'mp4': 
+            video_path = filepath  # replace with your video path
+            cap = cv2.VideoCapture(video_path)
+
+            # get video dimensions
+            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        
+            # Define the codec and create VideoWriter object
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter('output.mp4', fourcc, 30.0, (frame_width, frame_height))
+            while cap.isOpened():
+                if stop:
+                    stop = False
+                    break
+                ret, frame = cap.read()
+                if not ret:
+                    break                                                      
+
+                # do YOLOv9 detection on the frame here
+                #model = YOLO('yolov9c.pt')
+                results = model(frame, save=True)  #working
+                print(results)
+                _, buffer = cv2.imencode('.jpg', results[0].plot())
                 frame_as_text = base64.b64encode(buffer).decode('utf-8')
                 socketio.emit('frame', frame_as_text)
-                return "Done"
-            elif file_extension == 'mp4': 
-                video_path = filepath  # replace with your video path
-                cap = cv2.VideoCapture(video_path)
+                cv2.waitKey(1)
+            return "Done"         
 
-                # get video dimensions
-                frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                            
-                # Define the codec and create VideoWriter object
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                out = cv2.VideoWriter('output.mp4', fourcc, 30.0, (frame_width, frame_height))
-                
-                # initialize the YOLOv8 model here
-                model = YOLO('yolov9c.pt')
-                model.to(device)
-                
-                while cap.isOpened():
-                    ret, frame = cap.read()
-                    if not ret:
-                        break                                                      
-
-                    # do YOLOv9 detection on the frame here
-                    #model = YOLO('yolov9c.pt')
-                    results = model(frame, save=True)  #working
-                    print(results)
-                    _, buffer = cv2.imencode('.jpg', results[0].plot())
-                    frame_as_text = base64.b64encode(buffer).decode('utf-8')
-                    socketio.emit('frame', frame_as_text)
-                    cv2.waitKey(1)
-
-                    res_plotted = results[0].plot()
-                    # cv2.imshow("result", res_plotted)
-                    # socketio.emit('frame', frame_as_text)
-                    # write the frame to the output video
-                    out.write(res_plotted)
-
-                    if cv2.waitKey(1) == ord('q'):
-                        break
-                return "Done"
-                # return video_feed()            
-
-
-            
-    folder_path = 'runs/detect'
-    subfolders = [f for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]    
-    latest_subfolder = max(subfolders, key=lambda x: os.path.getctime(os.path.join(folder_path, x)))    
-    image_path = folder_path+'/'+latest_subfolder+'/'+f.filename 
-    return render_template('index.html', image_path=image_path)
-    #return "done"
-
-
-        
-
-def get_frame():
-    folder_path = os.getcwd()
-    mp4_files = 'output.mp4'
-    video = cv2.VideoCapture(mp4_files)  # detected video path
-    while True:
-        success, image = video.read()
-        if not success:
-            break
-        ret, jpeg = cv2.imencode('.jpg', image) 
-      
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n\r\n')   
-        time.sleep(0.1)  #control the frame rate to display one frame every 100 milliseconds: 
-
-# function to display the detected objects video on html page
-@app.route("/video_feed")
-def video_feed():
-    print("function called")
-    return Response(get_frame(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
-        
         
 @socketio.on('connect')
 def handle_connect():
@@ -141,11 +141,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Flask app exposing yolov9 models")
     parser.add_argument("--port", default=5000, type=int, help="port number")
     args = parser.parse_args()
-    model = YOLO('yolov9c.pt')
+    model = YOLO('best.pt')
     model.to(device)
-
-
-
+    stop = False
     socketio.run(app)
-    # socketio.run(app, host="0.0.0.0", port=args.port, cors_allowed_origins=['http://127.0.0.1:5000'])
-    # app.run(host="0.0.0.0", port=args.port) 
