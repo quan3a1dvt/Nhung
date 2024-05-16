@@ -17,12 +17,44 @@ const socket = socketIOClient(ENDPOINT);
 function App() {
   const [file, setFile] = useState()
   const [frame, setFrame] = useState('');
+  const [vehIn, setVehIn] = useState(0);
+  const [vehOut, setVehOut] = useState(0);
+  const [busIn, setBusIn] = useState(0);
+  const [busOut, setBusOut] = useState(0);
+  const [carIn, setCarIn] = useState(0);
+  const [carOut, setCarOut] = useState(0);
+  const [truckIn, setTruckIn] = useState(0);
+  const [truckOut, setTruckOut] = useState(0);
+
   useEffect(() => {
     socket.on('connected', (data) => {
       console.log('Connected to server:', data);
     });
     socket.on('frame', (frameData) => {
       setFrame(frameData);
+    });
+
+    socket.on('update_in', (value) => {
+      setVehIn(value)
+    });
+
+    socket.on('update_out', (value) => {
+      setVehOut(value)
+    });
+
+    socket.on('update_bus', (count) => {
+      setBusIn(count['IN'])
+      setBusOut(count['OUT'])
+    });
+
+    socket.on('update_car', (count) => {
+      setCarIn(count['IN'])
+      setCarOut(count['OUT'])
+    });
+
+    socket.on('update_truck', (count) => {
+      setTruckIn(count['IN'])
+      setTruckOut(count['OUT'])
     });
   }, []);
   function handleChange(event) {
@@ -85,22 +117,43 @@ function App() {
                   </div>
                   <div className="card-body">
                     <div className="tab-content p-0">
-                      <div className="chart tab-pane active" id="revenue-chart" style={{position: 'relative', height: 700}}>
-                        <form className="form-signin col-lg-3" onSubmit={handleSubmit} name="form1">
-                          <h1 className="h3 mb-3 font-weight-normal">Upload any image or video</h1>
-                          <input type="file" name="file" className="form-control-file" onChange={handleChange}/>
-                          <br />
-                          <button className="btn btn-block btn-default btn-sm " type="submit">Upload</button>
-                        </form>
-                        <div className="col-lg-3 mt-3">
-                          <button className="btn btn-block btn-default btn-sm" onClick={handleEsp}>ESP</button>
+                      <div className="chart tab-pane active" id="revenue-chart" style={{position: 'relative', height: 700, display:'flex'}}>
+                        <div>
+                          <form className="form-signin col-lg-12" onSubmit={handleSubmit} name="form1">
+                            <h1 className="h3 mb-3 font-weight-normal">Upload any image or video</h1>
+                            <input type="file" name="file" className="form-control-file" onChange={handleChange}/>
+                            <br />
+                            <button className="btn btn-block btn-default btn-sm " type="submit">Upload</button>
+                          </form>
+                          <div className="col-lg-12 mt-3">
+                            <button className="btn btn-block btn-default btn-sm" onClick={handleEsp}>ESP</button>
+                          </div>
+                          <div className="col-lg-12 mt-3">
+                            <button className="btn btn-block btn-default btn-sm" onClick={handleWebcam}>Webcam</button>
+                          </div>   
+                          <div className="col-lg-12 mt-3">
+                            <button className="btn btn-block btn-default btn-sm" style={{color: 'white', backgroundColor: '#f55d52'}} onClick={handleStop}>Stop</button>
+                          </div>  
                         </div>
-                        <div className="col-lg-3 mt-3">
-                          <button className="btn btn-block btn-default btn-sm" onClick={handleWebcam}>Webcam</button>
-                        </div>   
-                        <div className="col-lg-3 mt-3">
-                          <button className="btn btn-block btn-default btn-sm" style={{color: 'white', backgroundColor: '#f55d52'}} onClick={handleStop}>Stop</button>
-                        </div>   
+                          
+                        <div style={{paddingLeft: 50, fontSize: 20}}>
+                          <div style={{display: 'flex', marginBottom: 30}}>
+                            <div className="col-lg-8">Vehicle In:  {vehIn}</div>
+                            <div className="col-lg-8">Vehicle Out: {vehOut}</div>
+                          </div>
+                          <div style={{display: 'flex', marginBottom: 30}}>
+                            <div className="col-lg-8">Bus In:  {busIn}</div>
+                            <div className="col-lg-8">Bus Out: {busOut}</div>
+                          </div>
+                          <div style={{display: 'flex', marginBottom: 30}}>
+                            <div className="col-lg-8">Car In:  {carIn}</div>
+                            <div className="col-lg-8">Car Out: {carOut}</div>
+                          </div>
+                          <div style={{display: 'flex', marginBottom: 30}}>
+                            <div className="col-lg-8">Truck In:  {truckIn}</div>
+                            <div className="col-lg-8">Truck Out: {truckOut}</div>
+                          </div>
+                        </div>
                       </div>
                       
                     </div>

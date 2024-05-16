@@ -21,6 +21,7 @@ import time
 import glob
 from flask_cors import CORS
 from ultralytics import YOLO
+from ultralytics.solutions import object_counter, speed_estimation
 from flask_socketio import SocketIO
 import base64
 import urllib
@@ -30,10 +31,25 @@ app = Flask(__name__)
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*",port=5000,host='0.0.0.0')
 model = None
-
+counter = None
+speed_obj = None
 url_low = "http://10.0.0.172/cam-lo.jpg"
 url_mid = "http://10.0.0.172/cam-mid.jpg"
 url_high = "http://10.0.0.172/cam-hi.jpg"
+
+
+tracked_in = []
+tracked_out = []
+last_count_in = 0
+last_count_out = 0
+counted = 0
+
+bus_in = 0
+bus_out = 0
+car_in = 0
+car_out = 0
+truck_in = 0
+truck_out = 0
 
 stop = False
 
@@ -78,6 +94,19 @@ def predict_img_webcam():
 @app.route("/upload", methods=["POST"])
 def predict_img():
     global stop
+
+    tracked_in = []
+    tracked_out = []
+    last_count_in = 0
+    last_count_out = 0
+    counted = 0
+
+    bus_in = 0
+    bus_out = 0
+    car_in = 0
+    car_out = 0
+    truck_in = 0
+    truck_out = 0
     if 'file' in request.files:
         f = request.files['file']
         basepath = os.path.dirname(__file__)
@@ -120,9 +149,24 @@ def predict_img():
 
                 # do YOLOv9 detection on the frame here
                 #model = YOLO('yolov9c.pt')
-                results = model(frame, save=True)  #working
-                print(results)
-                _, buffer = cv2.imencode('.jpg', results[0].plot())
+                im0 = frame
+                tracks = model.track(im0, persist=True)
+                im0 = counter.start_counting(im0, tracks)
+                socketio.emit('update_in', counter.in_counts)
+                socketio.emit('update_out', counter.out_counts)
+                # im0 = speed_obj.estimate_speed(im0, tracks)
+                # print(results)
+                count_classes = counter.class_wise_count
+    
+
+                if (count_classes.__contains__('bus')):
+                    socketio.emit('update_bus', count_classes['bus'])
+                if (count_classes.__contains__('car')):
+                    socketio.emit('update_car', count_classes['car'])
+                if (count_classes.__contains__('truck')):
+                    socketio.emit('update_truck', count_classes['truck'])
+
+                _, buffer = cv2.imencode('.jpg', im0)
                 frame_as_text = base64.b64encode(buffer).decode('utf-8')
                 socketio.emit('frame', frame_as_text)
                 cv2.waitKey(1)
@@ -141,7 +185,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Flask app exposing yolov9 models")
     parser.add_argument("--port", default=5000, type=int, help="port number")
     args = parser.parse_args()
-    model = YOLO('best.pt')
+    model = YOLO('last.pt')
     model.to(device)
+    # Init Object Counter
+    region_points = [(20, 400), (1280, 404), (1280, 360), (20, 360)]
+    counter = object_counter.ObjectCounter()
+    counter.set_args(view_img=False,
+                    reg_pts=region_points,
+                    classes_names=model.names,
+                    draw_tracks=True,
+                    line_thickness=2, view_in_counts=False, view_out_counts=False)
     stop = False
     socketio.run(app)
